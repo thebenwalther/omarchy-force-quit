@@ -7,8 +7,8 @@ import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
-// macOS-style Force Quit: one row per open app (windows grouped by owning
-// process), with live CPU / memory so a spinning or frozen app stands out.
+// macOS-style Force Quit: one row per open app (windows grouped by class
+// and owning process), with live CPU / memory so a spinning or frozen app stands out.
 // Quit asks the app's windows to close; Force Quit SIGKILLs its process tree
 // after a confirmation.
 Panel {
@@ -23,7 +23,7 @@ Panel {
 
   property var apps: []
   property int selectedIndex: 0
-  property int selectedPid: -1
+  property string selectedKey: ""
   property var clients: null
   property var sample: null
   property var prevSample: null
@@ -74,17 +74,17 @@ Panel {
   function rebuild() {
     if (clients === null || sample === null) return
     var next = Model.buildApps(clients, sample, Model.cpuByPid(prevSample, sample), root.resolveName)
-    selectedIndex = selectedPid === -1 ? Model.frontmostIndex(next) : Model.indexForPid(next, selectedPid, selectedIndex)
+    selectedIndex = selectedKey === "" ? Model.frontmostIndex(next) : Model.indexForKey(next, selectedKey, selectedIndex)
     apps = next
-    selectedPid = apps.length > 0 ? apps[selectedIndex].pid : -1
+    selectedKey = apps.length > 0 ? apps[selectedIndex].key : ""
     // The app being confirmed vanished (crashed, or quit on its own).
-    if (confirmOpen && !apps.some(function(a) { return a.pid === root.confirmApp.pid })) cancelForceQuit()
+    if (confirmOpen && !apps.some(function(a) { return a.key === root.confirmApp.key })) cancelForceQuit()
   }
 
   function select(index) {
     if (apps.length === 0) return
     selectedIndex = Math.max(0, Math.min(apps.length - 1, index))
-    selectedPid = apps[selectedIndex].pid
+    selectedKey = apps[selectedIndex].key
   }
 
   function quitSelected() {
@@ -119,7 +119,7 @@ Panel {
   onOpenedChanged: {
     if (opened) {
       // Start on the frontmost app, never a selection left from last time.
-      selectedPid = -1
+      selectedKey = ""
       prevSample = null
       sample = null
       clients = null

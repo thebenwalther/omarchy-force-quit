@@ -1,6 +1,6 @@
 # Force Quit for Omarchy
 
-A macOS-style Force Quit panel for the Omarchy bar. One row per open app (windows grouped by the process that owns them), with live CPU and memory, so a spinning or frozen app stands out. **Quit** asks the app's windows to close; **Force Quit** kills its process tree after a confirmation.
+A macOS-style Force Quit panel for the Omarchy bar. One row per open app, with live CPU and memory, so a spinning or frozen app stands out. **Quit** asks the app's windows to close; **Force Quit** kills its process tree after a confirmation.
 
 An independent community plugin, licensed under [MIT](LICENSE). Not affiliated with Omarchy.
 
@@ -9,7 +9,7 @@ An independent community plugin, licensed under [MIT](LICENSE). Not affiliated w
 - Bar click or **Super+Alt+Esc** (with the keybinding below): open or close the panel.
 - Arrow keys select an app. **q** quits it; **Enter** or **Delete** force quits it after a confirmation. **Escape** cancels the confirmation or closes the panel.
 - Chromium web apps and Steam games are named from their desktop entries, not their window classes.
-- Windows that share a process (Chromium and its web apps) collapse into one row, because killing that process closes all of them.
+- Apps that share a process (Chromium and its web apps) get their own rows, but force quitting one kills that process, so the confirmation names the others that will close too. Their rows show the shared process's CPU and memory.
 - CPU turns urgent above 80%.
 
 ## Install, update, remove

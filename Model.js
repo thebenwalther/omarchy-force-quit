@@ -130,17 +130,19 @@ function matchEntry(cls, entries) {
   return null
 }
 
-// Groups windows into one row per owning process. Windows that share a pid
-// (e.g. Chromium and its web apps) collapse into one row, because killing
-// that pid closes all of them and the row should say so.
+// Groups windows into one row per app: windows of the same class in the
+// same process. Apps that share a process (Chromium and its web apps) still
+// get their own rows, but each row lists the others in `sharedWith`, because
+// force quitting one kills that process and closes them all.
 //
 // clients: parsed `hyprctl clients -j`; sample: parseSample() result;
 // cpu: cpuByPid() result; nameFor(cls) -> { name, icon } optional resolver.
 function buildApps(clients, sample, cpu, nameFor) {
   var procs = sample ? sample.procs : {}
   var kids = childrenIndex(procs)
-  var byPid = {}
+  var byKey = {}
   var order = []
+  var appPids = {}
   var list = Array.isArray(clients) ? clients : []
 
   for (var i = 0; i < list.length; i++) {
@@ -149,36 +151,41 @@ function buildApps(clients, sample, cpu, nameFor) {
     if (!(pid > 1) || c.mapped === false) continue
     var proc = procs[pid]
     if (proc && PROTECTED_COMMS[proc.comm]) continue
-    if (!byPid[pid]) {
-      byPid[pid] = { pid: pid, windows: [] }
-      order.push(pid)
+    var cls = String(c.class || c.initialClass || "")
+    var key = pid + " " + cls
+    if (!byKey[key]) {
+      byKey[key] = { key: key, pid: pid, windows: [] }
+      order.push(key)
+      appPids[pid] = true
     }
-    byPid[pid].windows.push({
+    byKey[key].windows.push({
       address: String(c.address || ""),
-      cls: String(c.class || c.initialClass || ""),
+      cls: cls,
       title: String(c.title || ""),
       focusHistoryID: Number(c.focusHistoryID)
     })
   }
 
-  var apps = []
+  var groups = []
+  var namesByPid = {}
   for (var j = 0; j < order.length; j++) {
-    var app = byPid[order[j]]
-    // Name the row after its most recently focused window so a shared
-    // Chromium process reads as whichever window the user last touched.
-    app.windows.sort(function(a, b) { return a.focusHistoryID - b.focusHistoryID })
-    var primary = app.windows[0]
-    var resolved = nameFor ? nameFor(primary.cls) : null
-    var name = (resolved && resolved.name) || fallbackName(primary.cls, primary.title)
-    // A shared process can hold unrelated-looking windows (the X web app and
-    // the Chromium browser), so spell out every app a force quit would take.
-    var names = [name]
-    for (var w = 1; w < app.windows.length; w++) {
-      var other = nameFor ? nameFor(app.windows[w].cls) : null
-      var otherName = (other && other.name) || fallbackName(app.windows[w].cls, app.windows[w].title)
-      if (names.indexOf(otherName) < 0) names.push(otherName)
-    }
-    var tree = descendants(app.pid, procs, kids, byPid)
+    var group = byKey[order[j]]
+    // The most recently focused window titles the row and ranks it.
+    group.windows.sort(function(a, b) { return a.focusHistoryID - b.focusHistoryID })
+    var primary = group.windows[0]
+    group.resolved = nameFor ? nameFor(primary.cls) : null
+    group.name = (group.resolved && group.resolved.name) || fallbackName(primary.cls, primary.title)
+    if (!namesByPid[group.pid]) namesByPid[group.pid] = []
+    if (namesByPid[group.pid].indexOf(group.name) < 0) namesByPid[group.pid].push(group.name)
+    groups.push(group)
+  }
+
+  var apps = []
+  for (var g = 0; g < groups.length; g++) {
+    var app = groups[g]
+    var first = app.windows[0]
+    var sharedWith = namesByPid[app.pid].filter(function(n) { return n !== app.name })
+    var tree = descendants(app.pid, procs, kids, appPids)
     var cpuTotal = null
     var rss = 0
     for (var k = 0; k < tree.length; k++) {
@@ -189,22 +196,22 @@ function buildApps(clients, sample, cpu, nameFor) {
     }
     var state = procs[app.pid] ? procs[app.pid].state : ""
     apps.push({
+      key: app.key,
       pid: app.pid,
-      name: name,
-      icon: (resolved && resolved.icon) || "",
-      cls: primary.cls,
-      subtitle: app.windows.length === 1 ? primary.title
-        : names.length > 1 ? app.windows.length + " windows · " + names.join(", ")
-        : app.windows.length + " windows",
-      sharedWith: names.slice(1),
+      name: app.name,
+      icon: (app.resolved && app.resolved.icon) || "",
+      cls: first.cls,
+      subtitle: app.windows.length === 1 ? first.title : app.windows.length + " windows",
+      sharedWith: sharedWith,
       windowCount: app.windows.length,
       addresses: app.windows.map(function(w) { return w.address }),
+      // Shared-process rows report the whole process, so they repeat figures.
       cpu: cpuTotal,
       rssKb: rss,
       // T/t = stopped or traced: frozen and won't respond to a polite quit.
       stopped: state === "T" || state === "t",
       // 0 = the window focused right now; lower means used more recently.
-      focusRank: primary.focusHistoryID,
+      focusRank: first.focusHistoryID,
       treePids: tree
     })
   }
@@ -255,9 +262,9 @@ function confirmMessage(app) {
 
 // Keeps the cursor on the same app across refreshes, falling back to the
 // nearest surviving row when it disappears.
-function indexForPid(apps, pid, fallbackIndex) {
+function indexForKey(apps, key, fallbackIndex) {
   for (var i = 0; i < apps.length; i++) {
-    if (apps[i].pid === pid) return i
+    if (apps[i].key === key) return i
   }
   if (apps.length === 0) return 0
   return Math.max(0, Math.min(fallbackIndex, apps.length - 1))
@@ -276,6 +283,6 @@ if (typeof module !== "undefined") {
     formatMemory: formatMemory,
     formatCpu: formatCpu,
     confirmMessage: confirmMessage,
-    indexForPid: indexForPid
+    indexForKey: indexForKey
   }
 }
