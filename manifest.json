@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "thebenwalther.force-quit",
+  "name": "Force Quit",
+  "version": "1.0.0",
+  "author": "thebenwalther",
+  "description": "See open apps and quit or force quit a hung one",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Force Quit",
+    "description": "See open apps and quit or force quit a hung one",
+    "category": "System",
+    "defaultSection": "right",
+    "allowMultiple": false
+  },
+  "license": "MIT"
+}
